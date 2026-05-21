@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Copyright (c) 2025 Western Digital Corporation or its affiliates.
+#
+# Authors: Dennis Maisenbacher (dennis.maisenbacher@wdc.com)
+
+name: featuretest
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  KERNEL_VERSION: "linus-master"
+
+jobs:
+  featuretest-hba-no-kernel:
+    runs-on: arc-vm-jp-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v6
+        with:
+          repository: "MaisenbacherD/blktests-ci"
+          ref: "caching"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          container_disk_image: "quay.io/containerdisks/fedora:44"
+          host_devices: "hba-broadcom-sas34xx"
+          run_cmds: |
+            uname -a
+            cat /etc/os-release
+            lsblk
+  featuretest-hba-kernel:
+    runs-on: arc-vm-jp-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v6
+        with:
+          repository: "MaisenbacherD/blktests-ci"
+          ref: "caching"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          kernel_version: ${{ env.KERNEL_VERSION }}
+          container_disk_image: "quay.io/containerdisks/fedora:44"
+          host_devices: "hba-broadcom-sas34xx"
+          run_cmds: |
+            uname -a
+            cat /etc/os-release
+            lsblk
+  featuretest-no-hba:
+    runs-on: arc-vm-jp-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v6
+        with:
+          repository: "MaisenbacherD/blktests-ci"
+          ref: "caching"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          kernel_version: ${{ env.KERNEL_VERSION }}
+          container_disk_image: "quay.io/containerdisks/fedora:44"
+          run_cmds: |
+            uname -a
+            cat /etc/os-release
+            lsblk
+  featuretest-no-hba-no-kernel:
+    runs-on: arc-vm-jp-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v6
+        with:
+          repository: "MaisenbacherD/blktests-ci"
+          ref: "caching"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          container_disk_image: "quay.io/containerdisks/fedora:44"
+          run_cmds: |
+            uname -a
+            cat /etc/os-release
+            lsblk

@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Copyright (c) 2025 Western Digital Corporation or its affiliates.
+#
+# Authors: Dennis Maisenbacher (dennis.maisenbacher@wdc.com)
+
+name: dualvm
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  KERNEL_VERSION: "linus-master"
+
+jobs:
+  vm1:
+    runs-on: arc-vm-block-ci
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v6
+        with:
+          repository: "linux-blktests/blktests-ci"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          kernel_version: ${{ env.KERNEL_VERSION }}
+          vm_artifact_upload_dir: blktests/results
+          run_cmds: |
+            uname -a
+            lsblk
+            for i in {1..10}; do date; sleep 10; done
+            exit 0
+  vm2:
+    runs-on: arc-vm-block-ci
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v6
+        with:
+          repository: "linux-blktests/blktests-ci"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          kernel_version: ${{ env.KERNEL_VERSION }}
+          vm_artifact_upload_dir: blktests/results
+          run_cmds: |
+            uname -a
+            lsblk
+            for i in {1..10}; do date; sleep 10; done
+            exit 0
