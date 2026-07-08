@@ -21,7 +21,7 @@ jobs:
       - name: Run in VM
         uses: ./.github/actions/kubevirt-action
         with:
-          container_disk_image: "ghcr.io/linux-nvme/nvmetcli-tumbleweed-containerdisk:latest"
+          container_disk_image: "ghcr.io/maisenbacherd/nvmetcli-tumbleweed-containerdisk:fix-fuse-root"
           run_cmds: |
             uname -a
             cat /etc/os-release
