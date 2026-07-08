@@ -1,0 +1,28 @@
+name: Custom-Containerdisk
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CONTAINER_DISK: "ghcr.io/linux-nvme/nvmetcli-tumbleweed-containerdisk:latest"
+  # CONTAINER_DISK: "ghcr.io/linux-nvme/nvmetcli-debian-containerdisk:latest"
+  # CONTAINER_DISK: "ghcr.io/linux-nvme/nvmetcli-fedora-containerdisk:latest"
+jobs:
+  customcontainerdisk:
+    runs-on: arc-vm-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v7
+        with:
+          repository: linux-blktests/blktests-ci
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          container_disk_image: $CONTAINER_DISK
+          run_cmds: |
+            uname -a
+            cat /etc/os-release
+            lsblk
