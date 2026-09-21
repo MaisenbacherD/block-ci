@@ -1,0 +1,30 @@
+name: freebsd
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  freebsd:
+    runs-on: arc-vm-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v7
+        with:
+          repository: "MaisenbacherD/blktests-ci"
+          ref: "freebsd"
+
+      - name: Run in VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          distro: freebsd
+          host_devices: nvme-wdc-sn640
+          container_disk_image: ghcr.io/maisenbacherd/ci-containers/blktests-freebsd-containerdisk:next
+          run_cmds: |
+            uname -a
+            freebsd-version
+            sudo nvmecontrol devlist
+            sudo nvmecontrol identify "$NVME_CTRL0"
+            geom disk list
+            echo "BDEV0=$BDEV0 NVME_NS0=$NVME_NS0"
