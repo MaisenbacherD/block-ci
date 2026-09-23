@@ -1,0 +1,50 @@
+name: kpd-ci-vm-step
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vm-step:
+    runs-on: arc-vm-dennis-block-ci
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+        with:
+          repository: linux-blktests/blktests-ci
+          path: blktests-ci
+
+      - name: Run in VM
+        uses: ./blktests-ci/.github/actions/kubevirt-action
+        with:
+          container_disk_image: ghcr.io/linux-nvme/blktests-fedora-containerdisk:latest
+          kernel_version: linus-master
+          vm_artifact_upload_dir: blktests/results
+          run_cmds: |
+            uname -a
+            cat /etc/os-release
+            lsblk
+
+            git clone https://git.kernel.org/pub/scm/utils/mdadm/mdadm.git
+            cd mdadm
+            git checkout mdadm-4.6
+            make -j$(nproc)
+            sudo make install
+            mdadm --version
+
+            cd -
+            git clone https://github.com/linux-blktests/blktests.git
+
+            cd blktests
+            git checkout ci
+            make
+
+            mkdir -p ~/cond
+            echo md-001 > ~/cond/list
+            echo 'BLKTESTS_CI_CHECK_ARGS="md/001"' > ~/cond/md-001
+            ./contrib/run_ci ~/cond | tee run_ci.log
+
+            echo "KPD: blktests completed"
+            test -f all_failures && echo "KPD: Failures:" && cat all_failures
+            test -f all_failures && exit 1
+            grep -qE 'md/001.*passed' run_ci.log || { echo "md/001 did not pass"; exit 1; }
+            exit 0
