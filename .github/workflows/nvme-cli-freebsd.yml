@@ -1,0 +1,86 @@
+name: nvme-cli-freebsd
+
+on:
+  workflow_dispatch:
+
+#Runs the nvme-cli test cases of the nvme-cli nightly workflow
+#(run-nightly-tests.yml in linux-nvme/nvme-cli) in a FreeBSD VM. The blktests
+#part of the nightly is left out.
+jobs:
+  nvme-cli-tests:
+    runs-on: arc-vm-dennis-block-ci
+    timeout-minutes: 1200
+    steps:
+      - name: Checkout blktests-ci
+        uses: actions/checkout@v7
+        with:
+          repository: "linux-blktests/blktests-ci"
+
+      #No kernel_version: FreeBSD guests boot the kernel of their image.
+      - name: Run nvme-cli tests in FreeBSD VM
+        uses: ./.github/actions/kubevirt-action
+        with:
+          distro: freebsd
+          #The e2e tests exercise the NVM command set, and FreeBSD cannot use
+          #ZNS namespaces, so only the conventional drive is attached.
+          host_devices: "nvme-wdc-sn640"
+          vm_artifact_upload_dir: nvme-cli/tests/nvmetests/
+          run_cmds: |
+            #The login shell of a FreeBSD guest is /bin/sh, so keep this POSIX.
+            set -e
+            set -x
+            uname -a
+            freebsd-version
+
+            sudo pkg install -y git meson ninja pkgconf json-c python3 swig
+
+            #The action exports the NVMe devices the guest found, e.g.
+            #NVME_CTRL0=/dev/nvme0 and NVME_NS0=/dev/nvme0ns1.
+            sudo nvmecontrol devlist
+            if [ -z "${NVME_CTRL0}" ] || [ -z "${NVME_NS0}" ]; then
+              echo "ERROR: no NVMe controller or namespace in the VM" >&2
+              exit 1
+            fi
+
+            git clone https://github.com/linux-nvme/nvme-cli.git nvme-cli
+            cd nvme-cli
+            git log -1 --format='%H %s'
+
+            #nvme-cli master builds only on Linux and Windows. The patch next
+            #to this workflow adds the FreeBSD build fixes. --3way lets it
+            #survive unrelated upstream changes to the patched files.
+            fetch -o /tmp/freebsd-build.patch \
+                "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/.github/workflows/nvme-cli-freebsd/freebsd-build.patch"
+            git apply --3way /tmp/freebsd-build.patch
+            git diff HEAD --stat
+
+            #The steps of the 'tests' config of scripts/build.sh, which has no
+            #switch for the PCI check. That check reads Linux sysfs, so it is
+            #turned off. Coverage is left out, as nothing uploads it here.
+            CC=clang meson setup --werror --buildtype=release \
+                -De2e-tests=true \
+                -De2e-controller="${NVME_CTRL0}" \
+                -De2e-ns1="${NVME_NS0}" \
+                -De2e-log-dir="${PWD}/tests/nvmetests" \
+                -De2e-log-level=DEBUG \
+                -De2e-nvme-bin="${PWD}/.build-ci/nvme" \
+                -De2e-validate-pci-device=false \
+                -Dplugin-tests=ocp,micron \
+                .build-ci
+            #-k0 keeps going after a failed object, so a single run shows every
+            #FreeBSD build error.
+            meson compile -C .build-ci --ninja-args=-k0
+            .build-ci/nvme --version
+
+            #The passthru ioctls need root. --no-rebuild keeps root out of the
+            #build tree.
+            mkdir -p tests/nvmetests
+            set +e
+            sudo meson test -C .build-ci --no-rebuild
+            test_status=$?
+            set -e
+
+            #Copy the results into the expected upload directory
+            sudo cp -r .build-ci/meson-logs tests/nvmetests 2>/dev/null || true
+
+            exit "${test_status}"

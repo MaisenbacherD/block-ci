@@ -1,0 +1,118 @@
+FreeBSD build fixes for nvme-cli master, applied by nvme-cli-freebsd.yml.
+Regenerate with 'git diff' from a patched nvme-cli tree, and drop this file
+once nvme-cli builds on FreeBSD without it.
+
+diff --git a/libnvme/src/meson.build b/libnvme/src/meson.build
+index 0e5c1def..030e99b3 100644
+--- a/libnvme/src/meson.build
++++ b/libnvme/src/meson.build
+@@ -14,7 +14,7 @@ sources = [
+     'nvme/tree.c',
+     'nvme/util.c',
+ ]
+-if host_system == 'linux'
++if host_system in ['linux', 'freebsd']
+     sources += [
+         'nvme/attr-accessors-custom-linux.c',
+         'nvme/ioctl-linux.c',
+diff --git a/libnvme/src/nvme/ioctl-linux.c b/libnvme/src/nvme/ioctl-linux.c
+index 8eb19b85..95d93432 100644
+--- a/libnvme/src/nvme/ioctl-linux.c
++++ b/libnvme/src/nvme/ioctl-linux.c
+@@ -13,7 +13,9 @@
+ #include <string.h>
+ #include <unistd.h>
+ 
++#if defined(__linux__)
+ #include <linux/fs.h>
++#endif
+ 
+ #include <sys/ioctl.h>
+ #include <sys/stat.h>
+@@ -102,6 +104,7 @@ __shr_public int libnvme_get_nsid(
+ __shr_public int libnvme_update_block_size(
+ 		struct libnvme_transport_handle *hdl, int block_size)
+ {
++#if defined(BLKBSZSET) && defined(BLKRRPART)
+ 	int ret;
+ 	libnvme_fd_t fd = libnvme_transport_handle_get_fd(hdl);
+ 
+@@ -114,6 +117,12 @@ __shr_public int libnvme_update_block_size(
+ 		return -errno;
+ 
+ 	return 0;
++#else
++	/* BLKBSZSET and BLKRRPART are Linux block device ioctls. */
++	(void)hdl;
++	(void)block_size;
++	return -ENOTSUP;
++#endif
+ }
+ 
+ /*
+diff --git a/libnvme/src/nvme/mem-linux.c b/libnvme/src/nvme/mem-linux.c
+index da8a74fd..eeecd441 100644
+--- a/libnvme/src/nvme/mem-linux.c
++++ b/libnvme/src/nvme/mem-linux.c
+@@ -108,6 +108,7 @@ __shr_public void *libnvme_alloc_huge(size_t len,
+ 		return mh->p;
+ 	}
+ 
++#ifdef MAP_HUGETLB
+ 	/*
+ 	 * Larger allocation will almost certainly fail with the small
+ 	 * allocation approach. Instead try pre-allocating memory from the
+@@ -121,6 +122,7 @@ __shr_public void *libnvme_alloc_huge(size_t len,
+ 		mh->len = len;
+ 		return mh->p;
+ 	}
++#endif
+ 
+ 	/*
+ 	 * And if mmap fails because the pool is empty, try to use
+@@ -142,7 +144,9 @@ __shr_public void *libnvme_alloc_huge(size_t len,
+ 	 * transparent huge pages are unavailable. Let the I/O path try to map
+ 	 * the buffer.
+ 	 */
++#ifdef MADV_HUGEPAGE
+ 	madvise(mh->p, mh->len, MADV_HUGEPAGE);
++#endif
+ 
+ 	return mh->p;
+ }
+diff --git a/shared/fs-util.h b/shared/fs-util.h
+index bd2b3126..69ae2d11 100644
+--- a/shared/fs-util.h
++++ b/shared/fs-util.h
+@@ -7,10 +7,16 @@
+  */
+ #pragma once
+ 
++#include <errno.h>
+ #include <fcntl.h>
+ #include <stdbool.h>
+ #include <sys/types.h>
+ 
++/* FreeBSD has no ENODATA. ENOATTR is its closest equivalent. */
++#ifndef ENODATA
++#define ENODATA ENOATTR
++#endif
++
+ /*
+  * Create a single directory.
+  * Return: 0 on success, -errno otherwise.
+diff --git a/src/meson.build b/src/meson.build
+index 347bc335..26a1e617 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -35,6 +35,10 @@ if host_system == 'linux'
+         'src/nvme-pci-ids-linux.c',
+         'src/dashboard.c',
+     ]
++elif host_system == 'freebsd'
++    sources += [
++        'src/nvme-pci-ids-linux.c',
++    ]
+ elif host_system == 'windows'
+     sources += [
+         'src/nvme-pci-ids-win.c',
